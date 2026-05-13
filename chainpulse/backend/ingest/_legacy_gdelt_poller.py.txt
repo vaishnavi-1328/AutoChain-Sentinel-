@@ -1,0 +1,148 @@
+"""GDELT v2 poller.
+
+Polls http://data.gdeltproject.org/gdeltv2/lastupdate.txt every 60s.
+Each line points to an export.CSV. We download newest, filter CAMEO
+EventCode prefixes 14 (Protest), 17 (Coercion), 18 (Assault), 20 (Aid),
+then publish each surviving row to Kafka raw.news.
+"""
+from __future__ import annotations
+
+import asyncio
+import csv
+import io
+import logging
+import zipfile
+from datetime import datetime, timezone
+from typing import Any
+
+import httpx
+
+from chainpulse.backend.services.kafka_producer import publish_raw_news
+
+log = logging.getLogger("chainpulse.ingest.gdelt")
+
+LASTUPDATE_URL = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
+CAMEO_PREFIXES = ("14", "17", "18", "20")
+
+# GDELT v2 events.CSV columns (positional). We only use a handful.
+GDELT_COLS = {
+    "GLOBALEVENTID": 0,
+    "SQLDATE": 1,
+    "EventCode": 26,
+    "EventBaseCode": 27,
+    "EventRootCode": 28,
+    "GoldsteinScale": 30,
+    "AvgTone": 34,
+    "Actor1CountryCode": 7,
+    "ActionGeo_FullName": 53,
+    "ActionGeo_CountryCode": 54,
+    "ActionGeo_Lat": 57,
+    "ActionGeo_Long": 58,
+    "DATEADDED": 59,
+    "SOURCEURL": 60,
+}
+
+_seen_export_urls: set[str] = set()
+
+
+async def _fetch_lastupdate(client: httpx.AsyncClient) -> str | None:
+    r = await client.get(LASTUPDATE_URL, timeout=15)
+    r.raise_for_status()
+    for line in r.text.splitlines():
+        parts = line.split()
+        if len(parts) >= 3 and parts[2].endswith(".export.CSV.zip"):
+            return parts[2]
+    return None
+
+
+async def _fetch_export(client: httpx.AsyncClient, url: str) -> list[list[str]]:
+    r = await client.get(url, timeout=30)
+    r.raise_for_status()
+    with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+        name = zf.namelist()[0]
+        with zf.open(name) as fp:
+            text = fp.read().decode("utf-8", errors="replace")
+    rows = list(csv.reader(io.StringIO(text), delimiter="\t"))
+    return rows
+
+
+def _row_to_article(row: list[str]) -> dict[str, Any] | None:
+    if len(row) < 61:
+        return None
+    code = row[GDELT_COLS["EventCode"]]
+    if not code or not code.startswith(CAMEO_PREFIXES):
+        return None
+    raw_id = row[GDELT_COLS["GLOBALEVENTID"]]
+    if not raw_id:
+        return None
+    return {
+        "source": "gdelt",
+        "raw_id": raw_id,
+        "headline": row[GDELT_COLS["ActionGeo_FullName"]] or f"GDELT {code}",
+        "body": (
+            f"CAMEO={code} actor={row[GDELT_COLS['Actor1CountryCode']]} "
+            f"country={row[GDELT_COLS['ActionGeo_CountryCode']]} "
+            f"goldstein={row[GDELT_COLS['GoldsteinScale']]} "
+            f"tone={row[GDELT_COLS['AvgTone']]}"
+        ),
+        "url": row[GDELT_COLS["SOURCEURL"]] or None,
+        "published_at": _gdelt_dateadded(row[GDELT_COLS["DATEADDED"]]),
+        "ingested_at": datetime.now(timezone.utc).isoformat(),
+        "lat": _safe_float(row[GDELT_COLS["ActionGeo_Lat"]]),
+        "lng": _safe_float(row[GDELT_COLS["ActionGeo_Long"]]),
+        "country_code": row[GDELT_COLS["ActionGeo_CountryCode"]] or None,
+    }
+
+
+def _safe_float(s: str) -> float | None:
+    try:
+        return float(s) if s else None
+    except ValueError:
+        return None
+
+
+def _gdelt_dateadded(s: str) -> str | None:
+    # GDELT DATEADDED is yyyymmddhhmmss
+    if not s or len(s) != 14:
+        return None
+    try:
+        dt = datetime.strptime(s, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+        return dt.isoformat()
+    except ValueError:
+        return None
+
+
+async def poll_once() -> int:
+    """Single poll. Returns # articles published."""
+    async with httpx.AsyncClient() as client:
+        export_url = await _fetch_lastupdate(client)
+        if not export_url:
+            log.warning("no export URL in lastupdate.txt")
+            return 0
+        if export_url in _seen_export_urls:
+            return 0
+        _seen_export_urls.add(export_url)
+        log.info("fetching GDELT export %s", export_url)
+        rows = await _fetch_export(client, export_url)
+
+    count = 0
+    for row in rows:
+        article = _row_to_article(row)
+        if article is None:
+            continue
+        try:
+            await publish_raw_news(article)
+            count += 1
+        except Exception:
+            log.exception("publish failed for gdelt %s", article.get("raw_id"))
+    log.info("gdelt published %d articles", count)
+    return count
+
+
+async def run_loop(interval_seconds: int = 60) -> None:
+    while True:
+        try:
+            await poll_once()
+        except Exception:
+            log.exception("gdelt poll iteration failed")
+        await asyncio.sleep(interval_seconds)

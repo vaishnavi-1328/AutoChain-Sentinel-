@@ -1,0 +1,85 @@
+"""NewsAPI /v2/everything poller.
+
+Free tier limit: 100 req/day. 7 query terms polled every 30 min (staggered)
+= ~336/day. To stay under, we round-robin: one term per minute, cycling
+through the 7. That's 60/hour total but each term gets refreshed every 7 min.
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+from datetime import datetime, timezone
+from itertools import cycle
+
+import httpx
+
+from chainpulse.backend.config.settings import get_settings
+from chainpulse.backend.services.kafka_producer import publish_raw_news
+
+log = logging.getLogger("chainpulse.ingest.newsapi")
+
+NEWSAPI_URL = "https://newsapi.org/v2/everything"
+
+QUERY_TERMS = [
+    "port strike OR port closure",
+    "shipping delay OR freight delay",
+    "factory shutdown OR plant closure",
+    "trade sanctions OR trade embargo",
+    "typhoon flood earthquake supply chain",
+    "semiconductor shortage",
+    "customs delay OR border closure",
+]
+
+
+async def poll_term(client: httpx.AsyncClient, q: str, api_key: str) -> int:
+    params = {
+        "q": q,
+        "language": "en",
+        "sortBy": "publishedAt",
+        "pageSize": 25,
+        "apiKey": api_key,
+    }
+    r = await client.get(NEWSAPI_URL, params=params, timeout=20)
+    if r.status_code != 200:
+        log.warning("newsapi %s: %s", r.status_code, r.text[:200])
+        return 0
+    payload = r.json()
+    count = 0
+    for art in payload.get("articles", []):
+        article = {
+            "source": "newsapi",
+            "raw_id": art.get("url") or f"{q}:{art.get('publishedAt','')}",
+            "headline": art.get("title") or "",
+            "body": art.get("description") or art.get("content") or "",
+            "url": art.get("url"),
+            "published_at": art.get("publishedAt"),
+            "ingested_at": datetime.now(timezone.utc).isoformat(),
+            "source_name": (art.get("source") or {}).get("name"),
+            "query_term": q,
+        }
+        try:
+            await publish_raw_news(article)
+            count += 1
+        except Exception:
+            log.exception("publish failed newsapi")
+    log.info("newsapi term=%r published %d", q, count)
+    return count
+
+
+async def run_loop(interval_seconds: int = 60) -> None:
+    s = get_settings()
+    if not s.newsapi_key:
+        log.warning("NEWSAPI_KEY empty — newsapi ingester idle")
+        # Idle loop; still respect cancellation.
+        while True:
+            await asyncio.sleep(3600)
+
+    terms = cycle(QUERY_TERMS)
+    async with httpx.AsyncClient() as client:
+        while True:
+            term = next(terms)
+            try:
+                await poll_term(client, term, s.newsapi_key)
+            except Exception:
+                log.exception("newsapi loop iteration failed")
+            await asyncio.sleep(interval_seconds)

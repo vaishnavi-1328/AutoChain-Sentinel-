@@ -1,0 +1,45 @@
+#ticker-wrap {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  display: flex; align-items: center;
+  padding-left: 12px;
+}
+#ticker-track {
+  white-space: nowrap;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  will-change: transform;
+}
+.tk-sep { color: var(--text-muted); padding: 0 8px; }
+.tk-icon--critical { color: var(--severity-critical); }
+.tk-icon--high     { color: var(--severity-high); }
+.tk-icon--medium   { color: var(--severity-medium); }
+.tk-icon--low      { color: var(--severity-low); }
+
+#chips {
+  display: flex;
+  gap: 1px;
+  border-left: 1px solid var(--border-subtle);
+}
+.chip {
+  width: 100px;
+  background: var(--bg-tertiary);
+  border-right: 1px solid var(--border-subtle);
+  display: flex; flex-direction: column;
+  justify-content: center; align-items: center;
+  padding: 4px 6px;
+}
+.chip-label {
+  font-size: 9px; letter-spacing: 0.08em;
+  color: var(--text-muted); text-transform: uppercase;
+}
+.chip-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px; color: var(--text-data);
+  font-weight: 500;
+}
+.chip-val--cyan      { color: var(--accent-cyan); }
+.chip-val--critical  { color: var(--severity-critical); }
+.chip-val--high      { color: var(--severity-high); }

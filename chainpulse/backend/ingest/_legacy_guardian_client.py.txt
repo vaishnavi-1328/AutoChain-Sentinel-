@@ -1,0 +1,93 @@
+"""Guardian Open Platform poller — primary keyword search source.
+
+Free tier: 12,000 requests/day, 1 req/second. Generous enough to use as
+the primary cross-publisher keyword stream. Endpoint:
+    https://content.guardianapis.com/search
+
+Rotates the same supply-chain query terms used by GNews/NewsAPI but at
+higher cadence (one term every 30s = 7 terms refreshed every ~3.5 min,
+2880 calls/day — well under the 12k cap).
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+from datetime import datetime, timezone
+from itertools import cycle
+
+import httpx
+
+from chainpulse.backend.config.settings import get_settings
+from chainpulse.backend.services.kafka_producer import publish_raw_news
+
+log = logging.getLogger("chainpulse.ingest.guardian")
+
+GUARDIAN_URL = "https://content.guardianapis.com/search"
+
+QUERY_TERMS = [
+    "port strike OR port closure",
+    "shipping delay OR freight delay",
+    "factory shutdown OR plant closure",
+    "trade sanctions OR trade embargo",
+    "typhoon OR flood OR earthquake supply chain",
+    "semiconductor shortage",
+    "customs delay OR border closure",
+]
+
+
+async def poll_term(client: httpx.AsyncClient, q: str, api_key: str) -> int:
+    params = {
+        "q": q,
+        "api-key": api_key,
+        "order-by": "newest",
+        "page-size": 25,
+        "show-fields": "headline,trailText,bodyText,shortUrl",
+        "show-tags": "keyword",
+    }
+    r = await client.get(GUARDIAN_URL, params=params, timeout=20)
+    if r.status_code != 200:
+        log.warning("guardian %s: %s", r.status_code, r.text[:200])
+        return 0
+    payload = r.json().get("response", {})
+    results = payload.get("results", [])
+    count = 0
+    for art in results:
+        fields = art.get("fields", {}) or {}
+        body = fields.get("bodyText") or fields.get("trailText") or ""
+        article = {
+            "source": "guardian",
+            "raw_id": art.get("id") or art.get("apiUrl") or fields.get("shortUrl", ""),
+            "headline": fields.get("headline") or art.get("webTitle") or "",
+            "body": body[:4000],
+            "url": art.get("webUrl") or fields.get("shortUrl"),
+            "published_at": art.get("webPublicationDate"),
+            "ingested_at": datetime.now(timezone.utc).isoformat(),
+            "source_name": "The Guardian",
+            "query_term": q,
+            "section": art.get("sectionName"),
+        }
+        try:
+            await publish_raw_news(article)
+            count += 1
+        except Exception:
+            log.exception("publish failed guardian")
+    log.info("guardian term=%r published %d", q, count)
+    return count
+
+
+async def run_loop(interval_seconds: int = 30) -> None:
+    s = get_settings()
+    if not s.guardian_api_key:
+        log.warning("GUARDIAN_API_KEY empty — guardian ingester idle")
+        while True:
+            await asyncio.sleep(3600)
+
+    terms = cycle(QUERY_TERMS)
+    async with httpx.AsyncClient() as client:
+        while True:
+            term = next(terms)
+            try:
+                await poll_term(client, term, s.guardian_api_key)
+            except Exception:
+                log.exception("guardian loop iteration failed")
+            await asyncio.sleep(interval_seconds)

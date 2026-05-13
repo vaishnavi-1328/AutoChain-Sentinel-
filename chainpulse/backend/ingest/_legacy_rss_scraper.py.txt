@@ -1,0 +1,61 @@
+"""RSS scraper. feedparser-driven."""
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import logging
+from datetime import datetime, timezone
+
+import feedparser
+
+from chainpulse.backend.services.kafka_producer import publish_raw_news
+
+log = logging.getLogger("chainpulse.ingest.rss")
+
+RSS_FEEDS = [
+    "https://www.hellenicshippingnews.com/feed/",
+    "https://splash247.com/feed/",
+    "https://www.tradewindsnews.com/rss",
+    "https://www.portmanagement.org/rss",
+    "https://www.wto.org/english/news_e/news_e.rss",
+]
+
+
+def _entry_id(feed_url: str, entry) -> str:
+    raw = entry.get("id") or entry.get("link") or entry.get("title", "") + feed_url
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+async def poll_feed(feed_url: str) -> int:
+    loop = asyncio.get_running_loop()
+    parsed = await loop.run_in_executor(None, feedparser.parse, feed_url)
+    count = 0
+    for entry in parsed.entries:
+        article = {
+            "source": "rss",
+            "raw_id": _entry_id(feed_url, entry),
+            "headline": entry.get("title", ""),
+            "body": entry.get("summary") or entry.get("description") or "",
+            "url": entry.get("link"),
+            "published_at": entry.get("published") or entry.get("updated"),
+            "ingested_at": datetime.now(timezone.utc).isoformat(),
+            "feed_url": feed_url,
+        }
+        try:
+            await publish_raw_news(article)
+            count += 1
+        except Exception:
+            log.exception("publish failed rss")
+    if count:
+        log.info("rss feed=%s published %d", feed_url, count)
+    return count
+
+
+async def run_loop(interval_seconds: int = 60) -> None:
+    while True:
+        for feed_url in RSS_FEEDS:
+            try:
+                await poll_feed(feed_url)
+            except Exception:
+                log.exception("rss poll failed feed=%s", feed_url)
+        await asyncio.sleep(interval_seconds)

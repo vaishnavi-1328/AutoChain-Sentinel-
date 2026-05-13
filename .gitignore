@@ -1,0 +1,47 @@
+# Claude Code
+.claude/
+CLAUDE.local.md
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Models / data artifacts
+*.pkl
+*.joblib
+mlruns/
+mlflow.db
+autochain-sentinel/data/seeds/*
+!autochain-sentinel/data/seeds/.gitkeep
+autochain-sentinel/models/*.pkl
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Build / dist
+build/
+dist/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+!*.tfvars.example
+
+# Docker
+*.log

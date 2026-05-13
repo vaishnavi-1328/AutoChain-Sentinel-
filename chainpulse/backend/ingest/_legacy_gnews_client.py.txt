@@ -1,0 +1,87 @@
+"""GNews poller — secondary keyword search source.
+
+Free tier: 100 requests/day, 10 articles/request. Small but useful for
+diversifying away from Guardian's UK-leaning sourcing. Endpoint:
+    https://gnews.io/api/v4/search
+
+Round-robin one term every ~15 minutes (7 terms × 96 cycles/day ≈ 96
+calls/day, under the 100 cap).
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+from datetime import datetime, timezone
+from itertools import cycle
+
+import httpx
+
+from chainpulse.backend.config.settings import get_settings
+from chainpulse.backend.services.kafka_producer import publish_raw_news
+
+log = logging.getLogger("chainpulse.ingest.gnews")
+
+GNEWS_URL = "https://gnews.io/api/v4/search"
+
+QUERY_TERMS = [
+    "port strike OR port closure",
+    "shipping delay OR freight delay",
+    "factory shutdown OR plant closure",
+    "trade sanctions OR embargo",
+    "typhoon flood earthquake supply",
+    "semiconductor shortage",
+    "customs delay OR border closure",
+]
+
+
+async def poll_term(client: httpx.AsyncClient, q: str, api_key: str) -> int:
+    params = {
+        "q": q,
+        "lang": "en",
+        "max": 10,
+        "sortby": "publishedAt",
+        "apikey": api_key,
+    }
+    r = await client.get(GNEWS_URL, params=params, timeout=20)
+    if r.status_code != 200:
+        log.warning("gnews %s: %s", r.status_code, r.text[:200])
+        return 0
+    payload = r.json()
+    count = 0
+    for art in payload.get("articles", []):
+        article = {
+            "source": "gnews",
+            "raw_id": art.get("url") or f"{q}:{art.get('publishedAt','')}",
+            "headline": art.get("title") or "",
+            "body": (art.get("description") or "") + "\n\n" + (art.get("content") or ""),
+            "url": art.get("url"),
+            "published_at": art.get("publishedAt"),
+            "ingested_at": datetime.now(timezone.utc).isoformat(),
+            "source_name": (art.get("source") or {}).get("name"),
+            "query_term": q,
+        }
+        try:
+            await publish_raw_news(article)
+            count += 1
+        except Exception:
+            log.exception("publish failed gnews")
+    log.info("gnews term=%r published %d", q, count)
+    return count
+
+
+async def run_loop(interval_seconds: int = 900) -> None:
+    s = get_settings()
+    if not s.gnews_api_key:
+        log.warning("GNEWS_API_KEY empty — gnews ingester idle")
+        while True:
+            await asyncio.sleep(3600)
+
+    terms = cycle(QUERY_TERMS)
+    async with httpx.AsyncClient() as client:
+        while True:
+            term = next(terms)
+            try:
+                await poll_term(client, term, s.gnews_api_key)
+            except Exception:
+                log.exception("gnews loop iteration failed")
+            await asyncio.sleep(interval_seconds)
