@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from chainpulse.backend.db.postgres import get_session
 from chainpulse.backend.models import Event
+from chainpulse.backend.services.delay_predictor import Features
+from chainpulse.backend.services.shap_explainer import explain as shap_explain
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -63,3 +65,33 @@ async def get_event(
     if e is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "event not found")
     return _to_dict(e)
+
+
+@router.get("/{event_id}/shap")
+async def event_shap(
+    event_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    try:
+        pg_id = uuid.UUID(event_id)
+    except ValueError:
+        pg_id = uuid.uuid5(uuid.NAMESPACE_URL, event_id)
+    result = await session.execute(select(Event).where(Event.id == pg_id))
+    e = result.scalar_one_or_none()
+    if e is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "event not found")
+
+    feats = Features(
+        event_type=e.type,
+        severity=e.severity,
+        location_name=e.location_name,
+        country_code=e.country_code,
+    )
+    result = shap_explain(feats)
+    if result is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "XGBoost models not loaded — run train_delay_model.py")
+    result["event_id"] = str(e.id)
+    result["event_title"] = e.title
+    result["actual_min"] = e.delay_min_days
+    result["actual_max"] = e.delay_max_days
+    return result

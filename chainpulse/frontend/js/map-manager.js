@@ -20,6 +20,7 @@ window.CPMap = (function () {
     }).addTo(map);
 
     L.control.zoom({ position: 'bottomleft' }).addTo(map);
+    window._cpLeaflet = map;  // expose for supplier-markers.js extension
   }
 
   function popupHTML(event) {
@@ -46,7 +47,7 @@ window.CPMap = (function () {
       <div class="cp-popup__metric">Affected routes: ${routes}</div>
       <div class="cp-popup__metric">SKUs at risk: ${skuCount}</div>
       ${event.source_url ? `<a class="cp-popup__btn" href="${event.source_url}" target="_blank" rel="noopener">🔗 Read original source</a>` : ''}
-      ${event.neo4j_event_node_id ? `<button class="cp-popup__btn" onclick="window.CPModal && window.CPModal.open('${event.neo4j_event_node_id}')">◈ View supply chain graph</button>` : ''}
+      ${event.id ? `<button class="cp-popup__btn" onclick="window.CPModal && window.CPModal.open('${event.id}')">◈ View supply chain graph</button>` : ''}
     `;
   }
 

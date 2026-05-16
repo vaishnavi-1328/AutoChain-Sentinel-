@@ -1,0 +1,18 @@
+[Unit]
+Description=ChainPulse FastAPI
+After=network.target redis-server.service
+
+[Service]
+Type=simple
+User=chainpulse
+WorkingDirectory=/opt/chainpulse
+EnvironmentFile=/opt/chainpulse/chainpulse/.env
+Environment=PYTHONPATH=/opt/chainpulse
+ExecStart=/opt/chainpulse/.venv/bin/uvicorn chainpulse.backend.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

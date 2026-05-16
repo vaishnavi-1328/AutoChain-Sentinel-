@@ -22,6 +22,7 @@
   <link rel="stylesheet" href="./css/sidebar.css" />
   <link rel="stylesheet" href="./css/ticker.css" />
   <link rel="stylesheet" href="./css/modal.css" />
+  <link rel="stylesheet" href="./css/orders.css" />
 </head>
 <body class="font-sans">
 
@@ -55,26 +56,40 @@
   <main id="grid">
     <section id="map-region" aria-label="World map">
       <div id="map-canvas"></div>
+      <button id="add-order-fab" type="button">+ Add Order</button>
     </section>
 
-    <aside id="sidebar" aria-label="Live news feed">
-      <div id="sidebar-header">
-        <div class="sb-row">
-          <span class="sb-title">LIVE FEED</span>
-          <button id="sb-pause" class="sb-btn" aria-label="Pause feed">⏸ <span id="sb-queue">0</span></button>
-        </div>
-        <div class="sb-row sb-row--filter">
-          <span class="sb-filter-label">Showing:</span>
-          <select id="sb-region" class="sb-select">
-            <option value="ALL">All Regions</option>
-            <option value="AP">Asia Pacific</option>
-            <option value="EU">Europe</option>
-            <option value="AM">Americas</option>
-            <option value="ME">Middle East</option>
-          </select>
-        </div>
+    <aside id="sidebar" aria-label="Sidebar">
+      <div class="tab-bar">
+        <button class="tab active" data-tab="news">News Feed</button>
+        <button class="tab" data-tab="orders">My Orders <span class="tab-badge"></span></button>
       </div>
-      <ul id="sb-list" aria-live="polite"></ul>
+
+      <!-- NEWS TAB -->
+      <div class="tab-panel active" data-tab="news">
+        <div id="sidebar-header">
+          <div class="sb-row">
+            <span class="sb-title">LIVE FEED</span>
+            <button id="sb-pause" class="sb-btn" aria-label="Pause feed">⏸ <span id="sb-queue">0</span></button>
+          </div>
+          <div class="sb-row sb-row--filter">
+            <span class="sb-filter-label">Showing:</span>
+            <select id="sb-region" class="sb-select">
+              <option value="ALL">All Regions</option>
+              <option value="AP">Asia Pacific</option>
+              <option value="EU">Europe</option>
+              <option value="AM">Americas</option>
+              <option value="ME">Middle East</option>
+            </select>
+          </div>
+        </div>
+        <ul id="sb-list" aria-live="polite"></ul>
+      </div>
+
+      <!-- ORDERS TAB -->
+      <div class="tab-panel" data-tab="orders">
+        <ul id="orders-list" class="orders-list"></ul>
+      </div>
     </aside>
 
     <footer id="statbar">
@@ -87,21 +102,39 @@
         <div class="chip"><span class="chip-label">HIGH</span><span id="chip-high" class="chip-val chip-val--high">0</span></div>
         <div class="chip"><span class="chip-label">AVG DELAY</span><span id="chip-avg" class="chip-val">0d</span></div>
         <div class="chip"><span class="chip-label">ROUTES</span><span id="chip-routes" class="chip-val">0</span></div>
+        <div class="chip orders-at-risk" title="Click to view My Orders">
+          <span class="chip-label">MY ORDERS AT RISK</span>
+          <span id="chip-orders-risk" class="chip-val">0 / 0</span>
+        </div>
       </div>
     </footer>
   </main>
 
-  <!-- GRAPH MODAL (phase 8 fills) -->
+  <!-- Order drawer + overlay -->
+  <div id="drawer-overlay"></div>
+  <aside id="order-drawer"></aside>
+
+  <!-- Graph modal -->
   <div id="graph-modal" class="hidden" role="dialog" aria-hidden="true"></div>
+  <!-- Order analysis modal -->
+  <div id="order-modal" class="hidden" role="dialog" aria-hidden="true"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/d3@7/dist/d3.min.js"></script>
   <script src="./js/config.js"></script>
   <script src="./js/clock.js"></script>
   <script src="./js/map-manager.js"></script>
+  <script src="./js/supplier-markers.js"></script>
   <script src="./js/sidebar-feed.js"></script>
   <script src="./js/stats-updater.js"></script>
   <script src="./js/ticker.js"></script>
+  <script src="./js/sidebar-tabs.js"></script>
+  <script src="./js/orders-feed.js"></script>
+  <script src="./js/order-drawer.js"></script>
+  <script src="./js/graph-modal.js"></script>
+  <script src="./js/order-analysis-modal.js"></script>
+  <script src="./js/toast.js"></script>
   <script src="./js/ws-client.js"></script>
   <script src="./js/app.js"></script>
 </body>

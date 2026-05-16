@@ -32,8 +32,15 @@ window.CPStats = (function () {
     els.high.textContent     = high;
     els.avg.textContent      = delayCount ? (delaySum / delayCount).toFixed(1) + 'd' : '0d';
     els.routes.textContent   = routeSum;
+    updateOrdersAtRisk();
+  }
+
+  function updateOrdersAtRisk() {
+    const el = document.getElementById('chip-orders-risk');
+    if (!el || !window.CPOrders) return;
+    el.textContent = `${window.CPOrders.atRiskCount()} / ${window.CPOrders.totalCount()}`;
   }
 
   setInterval(render, 5000);
-  return { update };
+  return { update, updateOrdersAtRisk };
 })();

@@ -40,7 +40,7 @@ window.CPSidebar = (function () {
         <span class="sb-actions">
           ${event.source_url ? `<a class="sb-action" href="${event.source_url}" target="_blank" rel="noopener" title="Open source">↗</a>` : ''}
           ${event.id ? `<a class="sb-action" href="#" data-evt="${event.id}" title="Show on map">◎</a>` : ''}
-          ${event.neo4j_event_node_id ? `<a class="sb-action" href="#" data-graph="${event.neo4j_event_node_id}" title="Graph">◈</a>` : ''}
+          ${event.id ? `<a class="sb-action" href="#" data-graph="${event.id}" title="Graph">◈</a>` : ''}
         </span>
       </div>
     `;

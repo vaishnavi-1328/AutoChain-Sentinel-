@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ChainPulse — Account</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./css/theme.css" />
+  <link rel="stylesheet" href="./css/orders.css" />
+  <style>
+    body { display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: auto; }
+    .card { width: 420px; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: 10px; padding: 24px; }
+    h1 { margin: 0 0 8px; font-size: 18px; color: var(--text-primary); }
+    p.sub { font-size: 12px; color: var(--text-secondary); margin: 0 0 18px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tabs button { flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border-default); color: var(--text-secondary); padding: 8px; cursor: pointer; border-radius: 6px; font-size: 12px; }
+    .tabs button.active { background: var(--bg-elevated); color: var(--text-primary); border-color: var(--border-active); }
+    label { display: block; margin-bottom: 10px; font-size: 11px; color: var(--text-muted); letter-spacing: 0.06em; }
+    label input { display: block; width: 100%; margin-top: 4px; background: var(--bg-tertiary); border: 1px solid var(--border-default); border-radius: 6px; padding: 8px 10px; color: var(--text-primary); font-size: 12px; }
+    .err { font-size: 11px; color: var(--severity-critical); margin: 6px 0; min-height: 14px; }
+    .ok { font-size: 11px; color: var(--severity-low); margin: 6px 0; }
+    button.primary { width: 100%; background: var(--accent-blue); border: none; color: white; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px; }
+    a.back { display: inline-block; margin-top: 14px; font-size: 11px; color: var(--accent-cyan); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>ChainPulse account</h1>
+    <p class="sub">Sign in or register to track suppliers and orders.</p>
+    <div class="tabs">
+      <button id="t-login" class="active" onclick="switchTab('login')">Sign in</button>
+      <button id="t-register" onclick="switchTab('register')">Register</button>
+    </div>
+    <form id="form">
+      <label>Email <input type="email" name="email" required /></label>
+      <label>Password <input type="password" name="password" minlength="6" required /></label>
+      <label id="company-wrap" style="display:none">Company <input type="text" name="company" /></label>
+      <div id="msg" class="err"></div>
+      <button class="primary" type="submit" id="submit-btn">Sign in</button>
+    </form>
+    <a class="back" href="./index.html">← Back to dashboard</a>
+  </div>
+  <script>
+    const CP_API = 'http://localhost:8000';
+    let mode = 'login';
+    function switchTab(m) {
+      mode = m;
+      document.getElementById('t-login').classList.toggle('active', m === 'login');
+      document.getElementById('t-register').classList.toggle('active', m === 'register');
+      document.getElementById('company-wrap').style.display = m === 'register' ? 'block' : 'none';
+      document.getElementById('submit-btn').textContent = m === 'register' ? 'Create account' : 'Sign in';
+      document.getElementById('msg').textContent = '';
+    }
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const body = { email: fd.get('email'), password: fd.get('password') };
+      if (mode === 'register') body.company = fd.get('company') || null;
+      const path = mode === 'register' ? '/auth/register' : '/auth/login';
+      const r = await fetch(CP_API + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const msg = document.getElementById('msg');
+      if (!r.ok) {
+        const t = await r.text();
+        msg.className = 'err';
+        msg.textContent = `Failed: ${t.slice(0, 160)}`;
+        return;
+      }
+      if (mode === 'register') {
+        // auto-login after register
+        const lr = await fetch(CP_API + '/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: body.email, password: body.password }),
+        });
+        const data = await lr.json();
+        localStorage.setItem('cp_token', data.access_token);
+      } else {
+        const data = await r.json();
+        localStorage.setItem('cp_token', data.access_token);
+      }
+      msg.className = 'ok';
+      msg.textContent = 'Signed in. Redirecting...';
+      setTimeout(() => { window.location.href = './index.html'; }, 600);
+    });
+  </script>
+</body>
+</html>

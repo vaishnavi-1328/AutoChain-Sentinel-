@@ -1,0 +1,43 @@
+# Fly.io config — primary API service.
+# 3 procs run as 3 separate machines on free tier; or scale=1 for single-machine combo.
+
+app = "chainpulse"
+primary_region = "ord"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  APP_ENV = "production"
+  PORT = "8000"
+  # CORS_ORIGINS overridden by secrets
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+
+[processes]
+  app     = "uvicorn chainpulse.backend.main:app --host 0.0.0.0 --port 8000"
+  ingest  = "python -m chainpulse.backend.ingest.runner"
+  nlp     = "python -m chainpulse.backend.services.nlp_runner"
+  storage = "python -m chainpulse.backend.services.storage_runner"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 8000
+  processes = ["app"]
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+    force_https = true
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443

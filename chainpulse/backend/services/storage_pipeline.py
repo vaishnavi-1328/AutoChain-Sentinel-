@@ -1,13 +1,16 @@
 """Storage pipeline.
 
 Reads processed.events stream → Postgres event row + Neo4j node + Redis TTL +
-user impact match + per-user Redis publish.
+user impact match + per-user Redis publish + supplier delay recompute.
 """
 from __future__ import annotations
 
 import logging
 from typing import Any
 
+from chainpulse.backend.db.postgres import get_session_factory
+from chainpulse.backend.db.redis import get_redis
+from chainpulse.backend.services.delay_engine import build_order_delay_msg, recompute_for_user_orders
 from chainpulse.backend.services.delay_predictor import Features, predict
 from chainpulse.backend.services.neo4j_writer import write_event
 from chainpulse.backend.services.postgres_writer import insert_event, match_user_impacts
@@ -15,6 +18,7 @@ from chainpulse.backend.services.redis_broadcast import (
     cache_event,
     publish_to_global,
     publish_to_users,
+    wrap_event_msg,
 )
 from chainpulse.backend.services.stream import consume, settings_streams
 
@@ -43,9 +47,42 @@ async def process_one(event: dict[str, Any]) -> dict[str, Any]:
     event["affected_sku_count"] = sum(impacts.values()) if impacts else 0
 
     await cache_event(event)
+
+    wrapped = wrap_event_msg(event)
     if impacts:
-        await publish_to_users(event, list(impacts.keys()))
-    await publish_to_global(event)
+        await publish_to_users(wrapped, list(impacts.keys()))
+    await publish_to_global(wrapped)
+
+    # V2: recompute supplier delays vs all active events, broadcast per-user.
+    try:
+        redis = get_redis()
+        factory = get_session_factory()
+        user_emails: dict = {}
+        async with factory() as session:
+            changed = await recompute_for_user_orders(session, redis)
+            if changed:
+                from sqlalchemy import select as _select
+                from chainpulse.backend.models import User as _User
+                ids = list({order.user_id for order, _ in changed})
+                rs = await session.execute(_select(_User).where(_User.id.in_(ids)))
+                for u in rs.scalars().all():
+                    user_emails[u.id] = u.email
+        for order, analysis in changed:
+            msg = build_order_delay_msg(order, analysis)
+            try:
+                await publish_to_users(msg, [str(order.user_id)])
+            except Exception:
+                log.exception("publish order_delay_update failed for %s", order.id)
+            email = user_emails.get(order.user_id)
+            if email:
+                try:
+                    from chainpulse.backend.services.email_alerts import maybe_alert
+                    await maybe_alert(email, order, analysis)
+                except Exception:
+                    log.exception("email alert failed for order %s", order.id)
+    except Exception:
+        log.exception("supplier delay recompute failed")
+
     return event
 
 

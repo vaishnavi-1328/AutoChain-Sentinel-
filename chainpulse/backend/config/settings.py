@@ -59,6 +59,14 @@ class Settings(BaseSettings):
     # ML
     model_dir: str = Field(default="./backend/ml", alias="MODEL_DIR")
 
+    # SMTP (email alerts)
+    smtp_host: str = Field(default="", alias="SMTP_HOST")
+    smtp_port: int = Field(default=587, alias="SMTP_PORT")
+    smtp_user: str = Field(default="", alias="SMTP_USER")
+    smtp_password: str = Field(default="", alias="SMTP_PASSWORD")
+    smtp_from: str = Field(default="alerts@chainpulse.local", alias="SMTP_FROM")
+    alerts_enabled: bool = Field(default=False, alias="ALERTS_ENABLED")
+
     # App
     app_env: str = Field(default="development", alias="APP_ENV")
     cors_origins: str = Field(

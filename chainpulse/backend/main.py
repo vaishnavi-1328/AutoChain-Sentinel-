@@ -21,7 +21,9 @@ from chainpulse.backend.db import redis as redis_db
 from chainpulse.backend.routers import auth as auth_router
 from chainpulse.backend.routers import events as events_router
 from chainpulse.backend.routers import graph as graph_router
+from chainpulse.backend.routers import orders as orders_router
 from chainpulse.backend.routers import profile as profile_router
+from chainpulse.backend.routers import suppliers as suppliers_router
 from chainpulse.backend.routers import websocket as ws_router
 from chainpulse.backend.services.ratelimit import limiter
 
@@ -77,6 +79,8 @@ app.include_router(auth_router.router)
 app.include_router(profile_router.router)
 app.include_router(events_router.router)
 app.include_router(graph_router.router)
+app.include_router(orders_router.router)
+app.include_router(suppliers_router.router)
 app.include_router(ws_router.router)
 
 

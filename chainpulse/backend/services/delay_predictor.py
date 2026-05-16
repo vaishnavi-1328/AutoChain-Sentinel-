@@ -53,8 +53,18 @@ class Features:
     country_code: str | None
 
 
+_PKG_ML = Path(__file__).resolve().parent.parent / "ml"
+
+
 def _model_path(suffix: str) -> Path:
-    return Path(get_settings().model_dir) / f"delay_model_{suffix}.pkl"
+    # Configured model_dir takes precedence; fallback to package ml/ dir.
+    cfg = Path(get_settings().model_dir)
+    if not cfg.is_absolute():
+        cfg = Path(__file__).resolve().parent.parent.parent.parent / cfg
+    candidate = cfg / f"delay_model_{suffix}.pkl"
+    if candidate.exists():
+        return candidate
+    return _PKG_ML / f"delay_model_{suffix}.pkl"
 
 
 def _load() -> None:
@@ -69,12 +79,20 @@ def _load() -> None:
                 log.exception("failed to load %s", p)
 
 
+EVENT_TYPE_IDX = {
+    "PORT_STRIKE": 0, "WEATHER_EVENT": 1, "FACTORY_CLOSURE": 2,
+    "SANCTIONS": 3, "GEOPOLITICAL": 4, "LOGISTICS_DELAY": 5, "OTHER": 6,
+}
+FEATURE_NAMES = ["event_type_idx", "severity_num", "port_rank", "hist_avg_days", "country_risk"]
+
+
 def _feature_vector(f: Features) -> list[float]:
     rank = PORT_RANK.get(f.location_name or "", 50)
     risk = COUNTRY_RISK.get(f.country_code or "", 5)
     hist = TYPE_HISTORICAL_DAYS.get(f.event_type, 5)
     sev = SEVERITY_NUM.get(f.severity, 1)
-    return [hash(f.event_type) % 100, sev, rank, hist, risk]
+    et_idx = EVENT_TYPE_IDX.get(f.event_type, 6)
+    return [et_idx, sev, rank, hist, risk]
 
 
 def _stub(f: Features) -> tuple[int, int, float]:
@@ -97,4 +115,10 @@ def predict(f: Features) -> tuple[int, int, float]:
     x = np.array([_feature_vector(f)])
     min_d = max(1, int(round(float(_min_model.predict(x)[0]))))
     max_d = max(min_d + 1, int(round(float(_max_model.predict(x)[0]))))
-    return min_d, max_d, 0.81
+    return min_d, max_d, 0.85
+
+
+def get_models():
+    """Expose loaded models for SHAP explainer."""
+    _load()
+    return _min_model, _max_model

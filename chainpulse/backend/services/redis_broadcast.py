@@ -13,6 +13,13 @@ EVENT_TTL_SECONDS = 300  # 5-min live TTL per spec
 USER_CHANNEL_PREFIX = "events:"
 
 
+def wrap_event_msg(event: dict[str, Any]) -> dict[str, Any]:
+    """Frontend WS router uses msg_type discriminator. Existing handlers expect msg_type='event'."""
+    if event.get("msg_type"):
+        return event
+    return {"msg_type": "event", **event}
+
+
 async def cache_event(event: dict[str, Any]) -> None:
     r = get_redis()
     key = f"event:{event['id']}"

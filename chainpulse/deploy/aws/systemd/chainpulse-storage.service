@@ -1,0 +1,18 @@
+[Unit]
+Description=ChainPulse storage consumer
+After=network.target redis-server.service
+
+[Service]
+Type=simple
+User=chainpulse
+WorkingDirectory=/opt/chainpulse
+EnvironmentFile=/opt/chainpulse/chainpulse/.env
+Environment=PYTHONPATH=/opt/chainpulse
+ExecStart=/opt/chainpulse/.venv/bin/python -m chainpulse.backend.services.storage_runner
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
