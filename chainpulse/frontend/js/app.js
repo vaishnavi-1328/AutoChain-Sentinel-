@@ -3,10 +3,12 @@
   window.CPTabs.init();
   window.CPMap.initSupplierLayer();
 
-  // hydrate orders if user has token
-  if (window.CPOrders) window.CPOrders.init().then(() => {
-    window.CPOrders.all().forEach((o) => window.CPMap.addSupplier(o));
-  });
+  // hydrate orders only when a token exists — avoids spurious 401s in dev tools
+  if (window.CPOrders && localStorage.getItem('cp_token')) {
+    window.CPOrders.init().then(() => {
+      window.CPOrders.all().forEach((o) => window.CPMap.addSupplier(o));
+    });
+  }
 
   // backfill recent events
   fetch(`${window.CP.API_BASE}/events/recent?limit=50`)

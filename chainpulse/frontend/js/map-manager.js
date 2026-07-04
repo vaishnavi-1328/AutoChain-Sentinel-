@@ -71,7 +71,9 @@ window.CPMap = (function () {
         <span class="cp-pin__dot"></span>
         <span class="cp-pin__label">${typeAbbr(event.type)}</span>
       </div>`;
-    return L.divIcon({ html, className: '', iconSize: [0, 0], iconAnchor: [0, 0] });
+    // iconSize [40,40] gives Leaflet a real bounding box so the absolutely-positioned
+    // pulse/dot children are not clipped. iconAnchor centers the icon on the coordinate.
+    return L.divIcon({ html, className: '', iconSize: [40, 40], iconAnchor: [20, 20] });
   }
 
   function add(event) {

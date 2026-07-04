@@ -32,7 +32,16 @@ window.CPWS = (function () {
     catch (e) { console.error('ws ctor failed', e); scheduleReconnect(); return; }
 
     ws.onopen = () => { setStatus('connected'); backoff = 2000; };
-    ws.onclose = () => { setStatus('disconnected'); scheduleReconnect(); };
+    ws.onclose = (evt) => {
+      setStatus('disconnected');
+      // Code 1008 = policy violation, which the backend sends for an invalid/expired JWT.
+      // Clear the stale token so the next reconnect goes anonymous rather than looping.
+      if (evt.code === 1008 && localStorage.getItem('cp_token')) {
+        console.warn('WS: JWT rejected (1008), clearing stale token');
+        localStorage.removeItem('cp_token');
+      }
+      scheduleReconnect();
+    };
     ws.onerror = () => { try { ws.close(); } catch {} };
     ws.onmessage = (msg) => {
       let payload;

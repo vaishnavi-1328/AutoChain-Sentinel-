@@ -54,9 +54,23 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="ChainPulse API", version="0.3.0", lifespan=lifespan)
 _settings = get_settings()
 
+_cors_origins = _settings.cors_origins_list
+# In development, also accept null origin (file://) and common local dev ports
+if _settings.app_env == "development":
+    _cors_origins = list({
+        *_cors_origins,
+        "http://localhost:8000",
+        "http://localhost:8080",
+        "http://localhost:5000",
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+        "http://127.0.0.1:8000",
+        "null",  # file:// pages send Origin: null
+    })
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_settings.cors_origins_list,
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

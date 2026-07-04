@@ -18,8 +18,10 @@ window.CPOrders = (function () {
     try {
       const r = await fetch(`${window.CP.API_BASE}/orders`, { headers: authHeaders() });
       if (!r.ok) {
+        // 401 = token expired or missing — clear stale token and prompt sign-in
+        if (r.status === 401) localStorage.removeItem('cp_token');
         listEl.innerHTML = `<li class="empty-state">Sign in to track supplier orders.<br>
-          <a href="./onboarding.html" style="color:var(--accent-cyan)">→ Sign up</a></li>`;
+          <a href="./onboarding.html" style="color:var(--accent-cyan)">→ Sign up / Sign in</a></li>`;
         return;
       }
       const orders = await r.json();

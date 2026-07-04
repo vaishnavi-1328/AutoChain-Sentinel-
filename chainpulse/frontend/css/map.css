@@ -10,7 +10,9 @@
 /* Custom pins */
 .cp-pin {
   position: relative;
-  width: 0; height: 0;
+  width: 40px; height: 40px;
+  /* overflow visible so pulse ring isn't clipped by the Leaflet marker DOM */
+  overflow: visible;
 }
 .cp-pin__dot {
   position: absolute;
@@ -48,18 +50,18 @@
   100% { transform: translate(-50%, -50%) scale(1.0); opacity: 0; }
 }
 
-/* Severity colors */
+/* Severity colors — pulse ring is larger than the dot so it visually radiates outward */
 .cp-pin--critical .cp-pin__dot   { width: 14px; height: 14px; background: var(--severity-critical); }
-.cp-pin--critical .cp-pin__pulse { width: 40px; height: 40px; background: var(--map-pin-pulse-critical); animation-duration: 1.2s; }
+.cp-pin--critical .cp-pin__pulse { width: 48px; height: 48px; background: var(--map-pin-pulse-critical); animation-duration: 1.2s; }
 
 .cp-pin--high     .cp-pin__dot   { width: 12px; height: 12px; background: var(--severity-high); }
-.cp-pin--high     .cp-pin__pulse { width: 34px; height: 34px; background: var(--map-pin-pulse-high); animation-duration: 1.6s; }
+.cp-pin--high     .cp-pin__pulse { width: 42px; height: 42px; background: var(--map-pin-pulse-high); animation-duration: 1.6s; }
 
 .cp-pin--medium   .cp-pin__dot   { width: 10px; height: 10px; background: var(--severity-medium); }
-.cp-pin--medium   .cp-pin__pulse { width: 28px; height: 28px; background: var(--map-pin-pulse-medium); animation-duration: 2.0s; }
+.cp-pin--medium   .cp-pin__pulse { width: 36px; height: 36px; background: var(--map-pin-pulse-medium); animation-duration: 2.0s; }
 
 .cp-pin--low      .cp-pin__dot   { width: 8px; height: 8px; background: var(--severity-low); }
-.cp-pin--low      .cp-pin__pulse { width: 22px; height: 22px; background: var(--map-pin-pulse-low); animation-duration: 2.5s; }
+.cp-pin--low      .cp-pin__pulse { width: 28px; height: 28px; background: var(--map-pin-pulse-low); animation-duration: 2.5s; }
 
 /* Popup */
 .leaflet-popup-content-wrapper {
