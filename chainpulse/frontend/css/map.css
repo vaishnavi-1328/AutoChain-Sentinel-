@@ -1,4 +1,6 @@
-#map-canvas { width: 100%; height: 100%; background: var(--bg-primary); }
+/* Force map to fill its container — Tailwind CDN preflight can collapse it */
+#map-region { width: 100%; height: 100%; }
+#map-canvas { width: 100% !important; height: 100% !important; background: var(--bg-primary); min-height: 400px; }
 
 /* Leaflet dark adjustments */
 .leaflet-container { background: var(--bg-primary); outline: none; }

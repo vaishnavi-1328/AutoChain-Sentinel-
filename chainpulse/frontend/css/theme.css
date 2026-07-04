@@ -29,13 +29,14 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; }
+/* !important guards against Tailwind CDN preflight resets */
+html, body { height: 100% !important; margin: 0 !important; padding: 0 !important; }
 body {
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 13px;
-  overflow: hidden;
+  overflow: hidden !important;
 }
 .font-sans { font-family: 'Inter', system-ui, sans-serif; }
 .tb-mono, .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
